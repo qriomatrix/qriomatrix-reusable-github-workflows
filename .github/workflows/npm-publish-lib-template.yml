@@ -1,0 +1,71 @@
+name: Publish Library
+run-name: Publish Library
+on:
+  workflow_call:
+    inputs:
+      REPOSITORY:
+        required: true
+        type: string
+      WORKING_DIRECTORY:
+        required: true
+        type: string
+      AWS_ACCOUNT_ID:
+        type: string
+        required: false
+        default: '980692338090'
+      AWS_REGION:
+        type: string
+        required: false
+        default: 'us-east-1'
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish_lib:
+    runs-on: ubuntu-latest
+    name: Publish Lib
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{inputs.AWS_REGION}}
+          role-to-assume: "arn:aws:iam::${{inputs.AWS_ACCOUNT_ID}}:role/system/xac-eng-role"
+          role-session-name: GitHubActionSession
+          role-chaining: true
+
+      - name: Login to AWS CodeArtifact
+        run: |
+          aws codeartifact login --tool npm --repository ${{ inputs.REPOSITORY }} --domain qriomatrix-libs
+
+      - name: Install Dependencies
+        working-directory: ${{ inputs.WORKING_DIRECTORY }}
+        run: |
+          rm package-lock.json
+          npm i
+
+      - name: Build Lib
+        working-directory: ${{ inputs.WORKING_DIRECTORY }}
+        run: |
+          npm run build
+
+      - name: Publish Lib
+        working-directory: ${{ inputs.WORKING_DIRECTORY }}
+        run: |
+          npm publish
